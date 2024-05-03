@@ -47,13 +47,14 @@ class SVB_ERROR_CODE(Enum):
     SVB_ERROR_OUTOF_BOUNDARY = 10
     SVB_ERROR_TIMEOUT = 11
     SVB_ERROR_INVALID_SEQUENCE = 12
-    SVB_ERROR_VIDEO_MODE_ACTIVE = 13
-    SVB_ERROR_EXPOSURE_IN_PROGRESS = 14
-    SVB_ERROR_GENERAL_ERROR = 15
-    SVB_ERROR_INVALID_MODE = 16
-    SVB_ERROR_INVALID_DIRECTION = 17
-    SVB_ERROR_UNKNOW_SENSOR_TYPE = 18
-    SVB_ERROR_END = 19
+    SVB_ERROR_BUFFER_TOO_SMALL = 13
+    SVB_ERROR_VIDEO_MODE_ACTIVE = 14
+    SVB_ERROR_EXPOSURE_IN_PROGRESS = 15
+    SVB_ERROR_GENERAL_ERROR = 16
+    SVB_ERROR_INVALID_MODE = 17
+    SVB_ERROR_INVALID_DIRECTION = 18
+    SVB_ERROR_UNKNOW_SENSOR_TYPE = 19
+    SVB_ERROR_END = 20
 
 class SVB_BOOL(Enum):
     SVB_FALSE = 0
@@ -105,7 +106,6 @@ class SVB_IMG_TYPE(Enum):
     SVB_IMG_RGB24=10
     SVB_IMG_RGB32=11
     SVB_IMG_END=-1
-
 
 class SVB_CONTROL_TYPE(Enum):
     SVB_GAIN=0
@@ -225,7 +225,7 @@ def SVBOpenCamera(id):
     if errcode != 0:
         raise Exception(f"Error code: {SVB_ERROR_CODE(errcode).name}")
     
-def SVBCloseCamera(id):
+def SVBCloseCamera(id) -> None:
     """Close a camera
     
     Close a camera and free resources
@@ -244,7 +244,7 @@ def SVBCloseCamera(id):
     if errcode != 0:
         raise Exception(SVB_ERROR_CODE(errcode))
 
-def SVBGetNumOfControls(id: int):
+def SVBGetNumOfControls(id: int) -> int:
     """Get number of camera controls
 
     Get number of camera controls.  Camera needs to be opened first.
@@ -264,7 +264,7 @@ def SVBGetNumOfControls(id: int):
         raise Exception(SVB_ERROR_CODE(errcode))
     return nctrl.value
 
-def SVBGetCameraProperty(id: int):
+def SVBGetCameraProperty(id: int) -> dict:
     """Get properties of given camera
     
     Get properties of given camera.  Camera must be opened first.
@@ -321,7 +321,7 @@ def SVBGetCameraProperty(id: int):
         "IsTriggerCam": prop.IsTriggerCam
     }
 
-def SVBGetControlCaps(id: int, ctrl_idx: int):
+def SVBGetControlCaps(id: int, ctrl_idx: int) -> list:
     """Get control capabilities description at given index
 
     Get control capabilities description at given index.  Camera must be opened first.
@@ -362,7 +362,7 @@ def SVBGetControlCaps(id: int, ctrl_idx: int):
         "ControlType": SVB_CONTROL_TYPE(caps.ControlType)
     }
 
-def SVBGetControlValue(id: int, ctrl_idx: int):
+def SVBGetControlValue(id: int, ctrl: SVB_CONTROL_TYPE) -> tuple[int, bool]:
     """Get controls property value and auto value
     
     Note:
@@ -370,7 +370,7 @@ def SVBGetControlValue(id: int, ctrl_idx: int):
 
     Args:
         id (int): Camera ID
-        ctrl_idx (int): Control index
+        ctrl (SVB_CONTROL_TYPE): Control type
 
     Returns:
         tuple: Tuple of value and auto value.  Value is the control value, auto is True if auto mode is enabled
@@ -380,19 +380,24 @@ def SVBGetControlValue(id: int, ctrl_idx: int):
     """
     value = ctypes.c_long(0)
     auto = ctypes.c_int(0)
-    errcode = __clib.SVBGetControlValue(id, ctrl_idx, ctypes.byref(value), ctypes.byref(auto))
+    errcode = __clib.SVBGetControlValue(id, ctrl.value, ctypes.byref(value), ctypes.byref(auto))
     if errcode != 0:
         raise Exception(SVB_ERROR_CODE(errcode))
     return (value.value, True if auto == 1 else False)
 
-def SVBSetControlValue(id: int, ctrl_idx: int, value: int, auto: bool):
+def SVBSetControlValue(id: int, ctrl: SVB_CONTROL_TYPE, value: int, auto: bool) -> None:
     """Set control value
     
     Set the control value and control auto.  Camera must be opened first.
 
+    Note: For FRAME_SPEED_MODE:
+        - 0 = Low Speed
+        - 1 = Normal
+        - 2 = High Speed
+
     Args:
         id (int): Camera ID
-        ctrl_idx (int): Control index
+        ctrl (SVB_CONTROL_TYPE): Control type
         value (int): Control value
         auto (bool): True if auto mode is enabled
 
@@ -403,11 +408,11 @@ def SVBSetControlValue(id: int, ctrl_idx: int, value: int, auto: bool):
         Exception: If error occurs
 
     """
-    errcode = __clib.SVBSetControlValue(id, ctrl_idx, value, 1 if auto else 0)
+    errcode = __clib.SVBSetControlValue(id, ctrl.value, value, 1 if auto else 0)
     if errcode != 0:
-        raise Exception(f"Error code: {SVB_ERROR_CODE(errcode).name}")
+        raise Exception(SVB_ERROR_CODE(errcode))
 
-def SVBGetOutputImageType(id: int):
+def SVBGetOutputImageType(id: int) -> SVB_IMG_TYPE:
     """Get output image type
 
     Get the current output image type, or format.
@@ -428,7 +433,7 @@ def SVBGetOutputImageType(id: int):
         raise Exception(SVB_ERROR_CODE(errcode))
     return SVB_IMG_TYPE(imgtype.value)
 
-def SVBSetOutputImageType(id: int, imgtype: SVB_IMG_TYPE):
+def SVBSetOutputImageType(id: int, imgtype: SVB_IMG_TYPE) -> None:
     """Set output image type
     
     Set the outout image type, or format.  Value must be type supported by the 
@@ -451,7 +456,7 @@ def SVBSetOutputImageType(id: int, imgtype: SVB_IMG_TYPE):
 
 
 
-def SVBSetROIFormat(id: int, iStartX: int, iStartY: int, iWidth: int, iHeight: int, iBin: int):
+def SVBSetROIFormat(id: int, iStartX: int, iStartY: int, iWidth: int, iHeight: int, iBin: int) -> None:
     """Set camera ROI
 
     Set the camera region of interest (ROI) before capture
@@ -480,7 +485,7 @@ def SVBSetROIFormat(id: int, iStartX: int, iStartY: int, iWidth: int, iHeight: i
 
 
 def SVBSetROIFormatEx(id: int, iStartX: int, iStartY: int,
-                      iWdith: int, iHeight: int, iBin: int, iMode: int):
+                      iWdith: int, iHeight: int, iBin: int, iMode: int) -> None:
     """Set camera ROI with mode
     
     Set the camera region of interest (ROI) before capture
@@ -509,7 +514,7 @@ def SVBSetROIFormatEx(id: int, iStartX: int, iStartY: int,
         raise Exception(SVB_ERROR_CODE(errcode))
 
 
-def SVBGetROIFormat(id: int):
+def SVBGetROIFormat(id: int) -> dict:
     """Get the current ROI format
 
     Get the current ROI format
@@ -545,7 +550,7 @@ def SVBGetROIFormat(id: int):
             "height": iHeight.value,
             "bin": iBin.value}
 
-def SVBGetROIFormatEx(id: int):
+def SVBGetROIFormatEx(id: int) -> dict:
     """Get the current ROI format with mode
     
     Get the current ROI format with mode
@@ -584,7 +589,7 @@ def SVBGetROIFormatEx(id: int):
             "bin": iBin.value,
             "mode": iMode.value}
 
-def SVBGetDroppedFrames(id: int):
+def SVBGetDroppedFrames(id: int) -> int:
     """Get dropped frames
     
     Dropped frames happen when USB bandwidth is not enough to transfer all frames or harddisk write
@@ -607,7 +612,7 @@ def SVBGetDroppedFrames(id: int):
         raise Exception(SVB_ERROR_CODE(errcode))
     return iDroppedFrames.value
 
-def SVBStartVideoCapture(id: int):
+def SVBStartVideoCapture(id: int) -> None:
     """Start video capture
     
     Start video capture
@@ -625,7 +630,7 @@ def SVBStartVideoCapture(id: int):
     if errcode != 0:
         raise Exception(SVB_ERROR_CODE(errcode))
 
-def SVBStopVideoCapture(id: int):
+def SVBStopVideoCapture(id: int) -> None:
     """Stop video capture
     
     Stop video capture
@@ -643,7 +648,7 @@ def SVBStopVideoCapture(id: int):
     if errcode != 0:
         raise Exception(SVB_ERROR_CODE(errcode))
 
-def SVBGetVideoData(id: int, waitMS: int=-1):
+def SVBGetVideoData(id: int, width: int, height: int, bytes_per_pixel: int, waitMS: int=-1) -> np.ndarray:
     """Capture a video frame to memory
     
     Capture a video frame to memory.  The camera on-board buffer is small so this needs
@@ -653,10 +658,13 @@ def SVBGetVideoData(id: int, waitMS: int=-1):
 
     Args:
         id (int): Camera ID
+        width (int): Width of the image in pixels
+        height (int): Height of the image in pixels
+        bytes_per_pixel (int): Bytes per pixel
         waitMS (int): Timeout in milliseconds.  -1 means wait forever
 
     Returns:
-        data: Image data and image size
+        frame: numpy array with frame data
 
     Raises:
         Exception: If error occurs
@@ -664,10 +672,11 @@ def SVBGetVideoData(id: int, waitMS: int=-1):
     """
 
     #imgtype = ctypes.POINTER(ctypes.c_ubyte)
-    imgtype = ctypes.c_ubyte * 2*1920*1080
-    raw = bytearray(2*1920*1080)
+    nbytes = bytes_per_pixel * width * height
+    imgtype = ctypes.c_ubyte * nbytes
+    raw = bytearray(nbytes)
     buf = imgtype.from_buffer(raw)
-    imgsize = ctypes.c_long(2 * 1920 * 1080)
+    imgsize = ctypes.c_long(nbytes)
     cwaitms = ctypes.c_int(waitMS)
 
     errcode = (
@@ -677,10 +686,18 @@ def SVBGetVideoData(id: int, waitMS: int=-1):
     )
     if errcode != 0:
         raise Exception(SVB_ERROR_CODE(errcode))
-    return buf
+    if bytes_per_pixel == 1:
+        return np.frombuffer(buf, dtype=np.uint8).reshape((height, width))
+    elif bytes_per_pixel == 2:
+        return np.frombuffer(buf, dtype=np.uint16).reshape((height, width))
+    elif bytes_per_pixel == 3:
+        return np.frombuffer(buf, dtype=np.uint8).reshape((height, width, 3))
+    elif bytes_per_pixel == 4:
+        return np.frombuffer(buf, dtype=np.uint32).reshape((height, width))
+    else:
+        raise Exception("Invalid bytes per pixel")
 
-
-def SVBWhiteBalanceOnce(id: int):
+def SVBWhiteBalanceOnce(id: int) -> None:
     """White balance once
     
     White balance once.  This will adjust the white balance once.  
@@ -697,7 +714,7 @@ def SVBWhiteBalanceOnce(id: int):
     if errcode != 0:
         raise Exception(SVB_ERROR_CODE(errcode))
 
-def SVBGetCameraFirmwareVersion(id: int):
+def SVBGetCameraFirmwareVersion(id: int) -> str:
     """Get camera firmware version
     
     Get camera firmware version
@@ -717,7 +734,7 @@ def SVBGetCameraFirmwareVersion(id: int):
         raise Exception(SVB_ERROR_CODE(errcode))
     return fwversion.value.decode("utf-8")
 
-def SVBGetSDKVersion():
+def SVBGetSDKVersion() -> str:
     """Get SDK version
     
     Get SDK version
@@ -729,7 +746,7 @@ def SVBGetSDKVersion():
     sdkversion = __clib.SVBGetSDKVersion()
     return sdkversion.decode("utf-8")
 
-def SVBGetCameraMode(id: int):
+def SVBGetCameraMode(id: int) -> SVB_CAMERA_MODE:
     """Get Camera Trigger Mode
     
     Get camera trigger mode.  Only needs to call when IsTriggerCam is True
@@ -749,7 +766,7 @@ def SVBGetCameraMode(id: int):
         raise Exception(SVB_ERROR_CODE(errcode))
     return SVB_CAMERA_MODE(mode.value)
 
-def SVBSetCameraMode(id: int, mode: SVB_CAMERA_MODE):
+def SVBSetCameraMode(id: int, mode: SVB_CAMERA_MODE) -> None:
     """Set Camera Trigger Mode
     
     Set camera trigger mode.  Only needs to call when IsTriggerCam is True
@@ -768,7 +785,8 @@ def SVBSetCameraMode(id: int, mode: SVB_CAMERA_MODE):
     if errcode != 0:
         raise Exception(SVB_ERROR_CODE(errcode))
     
-def SVBSetTriggerOutputIOConf(id: int, pin: SVB_TRIG_OUTPUT, active_high: bool, delay: int, duration: int):
+def SVBSetTriggerOutputIOConf(id: int, pin: SVB_TRIG_OUTPUT,
+                               active_high: bool, delay: int, duration: int) -> None:
     """Configure output pin of trigger port
     
     Configure the output pin (A or B) of trigger port.  If duration <=0, this output
@@ -791,7 +809,7 @@ def SVBSetTriggerOutputIOConf(id: int, pin: SVB_TRIG_OUTPUT, active_high: bool, 
     if errcode != 0:
         raise Exception(SVB_ERROR_CODE(errcode))
 
-def SVBGetTriggerOutputIOConf(id: int, pin):
+def SVBGetTriggerOutputIOConf(id: int, pin) -> tuple[bool, int, int]:
     """Get trigger output IO configuration
 
     Get trigger output IO configuration for the input pin
@@ -813,7 +831,7 @@ def SVBGetTriggerOutputIOConf(id: int, pin):
     return (True if active_high == 1 else False, delay.value, duration.value)
 
 
-def SVBPulseGuide(id: int, direction: SVB_GUIDE_DIRECTION, duration: int):
+def SVBPulseGuide(id: int, direction: SVB_GUIDE_DIRECTION, duration: int) -> None:
     """Pulse guide
     
     Pulse guide.  This will send a pulse guide command to the camera.  The camera must be in pulse guide mode
@@ -833,7 +851,7 @@ def SVBPulseGuide(id: int, direction: SVB_GUIDE_DIRECTION, duration: int):
     if errcode != 0:
         raise Exception(SVB_ERROR_CODE(errcode))
 
-def SVBSetAutoSaveParam(id: int, enable: bool):
+def SVBSetAutoSaveParam(id: int, enable: bool) -> None:
     """Set auto save parameter
     
     Set auto save parameter.  If true, then save the paramter file automatically
@@ -854,7 +872,7 @@ def SVBSetAutoSaveParam(id: int, enable: bool):
 
 
 
-def SVBGetCameraSupportMode(id: int):
+def SVBGetCameraSupportMode(id: int) -> str:
     """Get the camera supported mode.
 
     Get the camera supported mode.  Only need to call when "IsTriggerCam" in
@@ -875,7 +893,7 @@ def SVBGetCameraSupportMode(id: int):
         raise Exception(SVB_ERROR_CODE(errcode))
     return mode.mode.decode("utf-8")
 
-def SVBSendSoftTrigger(id: int):
+def SVBSendSoftTrigger(id: int) -> None:
     """Send software trigger
     
     Send software trigger.  Only needs to call when IsTriggerCam is True
@@ -893,7 +911,7 @@ def SVBSendSoftTrigger(id: int):
     if errcode != 0:
         raise Exception(SVB_ERROR_CODE(errcode))
 
-def SVBGetSerialNumber(id: int):
+def SVBGetSerialNumber(id: int) -> str:
     """Get camera serial number
     
     Get camera serial number
@@ -913,7 +931,7 @@ def SVBGetSerialNumber(id: int):
         raise Exception(SVB_ERROR_CODE(errcode))
     return sn.id.decode("utf-8")
 
-def SVBGetSensorPixelSize(id: int):
+def SVBGetSensorPixelSize(id: int) -> float:
     """Get sensor pixel size
     
     Get sensor pixel size in microns
@@ -933,7 +951,7 @@ def SVBGetSensorPixelSize(id: int):
         raise Exception(SVB_ERROR_CODE(errcode))
     return pixel_size.value
 
-def SVBIsCameraNeedToUpgrade(id: int):
+def SVBIsCameraNeedToUpgrade(id: int) -> tuple[bool, str]:
     """Check if camera needs to be upgraded
 
     Check if camera needs to be upgraded.  I have no idea how camera will know this, but it is 
@@ -956,7 +974,7 @@ def SVBIsCameraNeedToUpgrade(id: int):
     return (True if need_upgrade == 1 else False, upgrade_version.value.decode("utf-8"))
 
 
-def SVBRestoreDefaultParam(id: int):
+def SVBRestoreDefaultParam(id: int) -> None:
     """Restore default parameters
     
     Restore default parameters
@@ -977,7 +995,6 @@ def SVBRestoreDefaultParam(id: int):
 
 if __name__=="__main__":
     import pprint
-    import plotly.express as px
 
     print("This is the main program")    
     print(f"SDK Version: {SVBGetSDKVersion()}")
@@ -1001,11 +1018,8 @@ if __name__=="__main__":
         print(f'mode = {SVBGetCameraMode(id)}')
         pprint.pp(SVBGetROIFormat(id))
         SVBStartVideoCapture(id)
-        data = SVBGetVideoData(id, 500)
+        arr = SVBGetVideoData(id, 1920, 1080, 2, 500)
         SVBStopVideoCapture(id)
-        arr = np.frombuffer(bytes(data), np.dtype('<u2'))
-        arr = np.right_shift(arr, 4)
-        arr = arr.reshape(1080, 1920)
         
         print(f'min = {arr.min()} : max = {arr.max()} : mean = {arr.mean()} : std = {arr.std()}')    
         idx = np.argwhere(arr % 1 > 1e-6).flatten()
